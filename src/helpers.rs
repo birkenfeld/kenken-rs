@@ -10,6 +10,10 @@ impl<T> Tbl<T> {
         Tbl(n, vec![t; n*n])
     }
 
+    pub fn get(&self, (i, j): (usize, usize)) -> &T {
+        &self.1[i*self.0 + j]
+    }
+
     pub fn put(&mut self, i: usize, j: usize, t: T) {
         self.1[i*self.0 + j] = t;
     }

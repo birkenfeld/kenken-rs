@@ -1,10 +1,12 @@
 // KenKen puzzle solver, (c) 2016 Georg Brandl.
+#![feature(iter_arith)]
 
 mod helpers;
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader};
 use std::fs::File;
+use std::cmp::{max, min};
 use helpers::Tbl;
 
 pub enum Op {
@@ -24,6 +26,25 @@ pub struct Cage {
 impl Cage {
     fn new(val: u32) -> Cage {
         Cage { cells: Vec::with_capacity(6), lastcell: (0, 0), operation: Op::Const(val) }
+    }
+
+    fn satisfied(&self, tbl: &Tbl<u32>) -> bool {
+        match self.operation {
+            Op::Const(c) => tbl.get(self.cells[0]) == &c,
+            Op::Add(goal) => self.cells.iter().map(|&c| tbl.get(c)).sum::<u32>() == goal,
+            Op::Mul(goal) => self.cells.iter().map(|&c| tbl.get(c)).product::<u32>() == goal,
+            Op::Sub(goal) => {
+                let v1 = tbl.get(self.cells[0]);
+                let v2 = tbl.get(self.cells[1]);
+                max(v1, v2) - min(v1, v2) == goal
+            }
+            Op::Div(goal) => {
+                let v1 = tbl.get(self.cells[0]);
+                let v2 = tbl.get(self.cells[1]);
+                let (a, b) = (max(v1, v2), min(v1, v2));
+                a % b == 0 && a / b == goal
+            }
+        }
     }
 
     fn add_cell(&mut self, row: usize, col: usize) {
@@ -119,8 +140,62 @@ impl KenKen {
         Ok(ken)
     }
 
+    fn constraint_satisfied(&self, work: &Tbl<u32>, row: usize, col: usize) -> bool {
+        let cage = &self.cages[self.cell2cage.get((row, col)).0];
+        if (row, col) == cage.lastcell {
+            cage.satisfied(work)
+        } else {
+            true
+        }
+    }
+
     fn solve(&self) -> Result<(u32, Tbl<u32>), &'static str> {
-        Err("no solver yet")
+        fn inner(ken: &KenKen, work: &mut Tbl<u32>, res: &mut Vec<Tbl<u32>>,
+                 rmask: &mut [u32], cmask: &mut [u32], steps: &mut u32, row: usize, col: usize)
+        {
+            *steps += 1;
+            let pval = rmask[row] & cmask[col];
+
+            // try to place each number in a cell
+            for v in 1..ken.size+1 {
+                // check if we can do it without duplicating numbers in rows/cols
+                if pval & (1 << v) == 0 {
+                    continue;
+                }
+                // if yes, do it
+                work.put(row, col, v as u32);
+                // check if cage constraints are still satisfied
+                if ken.constraint_satisfied(work, row, col) {
+                    rmask[row] &= !(1 << v);
+                    cmask[col] &= !(1 << v);
+                    // and recurse
+                    if col < ken.size - 1 {
+                        inner(ken, work, res, rmask, cmask, steps, row, col + 1);
+                    } else if row < ken.size - 1 {
+                        inner(ken, work, res, rmask, cmask, steps, row + 1, 0);
+                    } else {
+                        res.push(work.clone());  // solution found!
+                    }
+                    // reset row/colmasks for our cell
+                    rmask[row] |= 1 << v;
+                    cmask[col] |= 1 << v;
+                }
+            }
+            // reset the cell
+            work.put(row, col, 0);
+        }
+
+        let mut work = Tbl::square(self.size, 0);
+        let mut res = Vec::new();
+        let mut rmask = vec![((1 << self.size) - 1) << 1; self.size];
+        let mut cmask = vec![((1 << self.size) - 1) << 1; self.size];
+        let mut steps = 0;
+        inner(self, &mut work, &mut res, &mut rmask, &mut cmask, &mut steps, 0, 0);
+        if res.len() > 1 {
+            Err("found more than 1 solution")
+        } else {
+            res.pop().ok_or("found no solution").map(|res| (steps, res))
+        }
     }
 }
 
