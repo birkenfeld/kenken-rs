@@ -6,16 +6,42 @@ use {KenKen, Op};
 use helpers::Tbl;
 
 fn generate_sums(max: u32, goal: u32, n: usize) -> BTreeSet<u32> {
-    fn inner(max: u32, goal: u32, n: usize, s: &mut BTreeSet<u32>) {
+    fn inner(max: u32, goal: u32, n: usize, s: &mut BTreeSet<u32>) -> bool {
         if n == 1 {
-            if goal <= max { s.insert(goal); }
+            if goal <= max { s.insert(goal); true } else { false }
         } else {
+            let mut ok = false;
             for i in 1..max+1 {
                 if goal > i {
-                    s.insert(i);
-                    inner(max, goal - i, n - 1, s);
+                    if inner(max, goal - i, n - 1, s) {
+                        ok = true;
+                        s.insert(i);
+                    }
                 }
             }
+            ok
+        }
+    }
+    let mut s = BTreeSet::new();
+    inner(max, goal, n, &mut s);
+    s
+}
+
+fn generate_products(max: u32, goal: u32, n: usize) -> BTreeSet<u32> {
+    fn inner(max: u32, goal: u32, n: usize, s: &mut BTreeSet<u32>) -> bool {
+        if n == 1 {
+            if goal <= max { s.insert(goal); true } else { false }
+        } else {
+            let mut ok = false;
+            for i in 1..max+1 {
+                if goal % i == 0 {
+                    if inner(max, goal / i, n - 1, s) {
+                        ok = true;
+                        s.insert(i);
+                    }
+                }
+            }
+            ok
         }
     }
     let mut s = BTreeSet::new();
@@ -25,24 +51,6 @@ fn generate_sums(max: u32, goal: u32, n: usize) -> BTreeSet<u32> {
 
 fn generate_subs(max: u32, goal: u32) -> BTreeSet<u32> {
     (1..max-goal+1).flat_map(|i| vec![i, i + goal]).collect()
-}
-
-fn generate_products(max: u32, goal: u32, n: usize) -> BTreeSet<u32> {
-    fn inner(max: u32, goal: u32, n: usize, s: &mut BTreeSet<u32>) {
-        if n == 1 {
-            if goal <= max { s.insert(goal); }
-        } else {
-            for i in 1..max+1 {
-                if goal % i == 0 {
-                    s.insert(i);
-                    inner(max, goal / i, n - 1, s);
-                }
-            }
-        }
-    }
-    let mut s = BTreeSet::new();
-    inner(max, goal, n, &mut s);
-    s
 }
 
 fn generate_divs(max: u32, goal: u32) -> BTreeSet<u32> {
@@ -89,6 +97,8 @@ pub fn reduce_constraints(ken: &KenKen, tbl: &mut Tbl<BTreeSet<u32>>) -> bool {
     }
     for row in 0..ken.size {
         for col in 0..ken.size {
+            // remove values from other cells in same row/col if two cells are
+            // known to have the same two possibilities
             if tbl.get((row, col)).len() == 2 {
                 for second in col+1..ken.size {
                     if tbl.get((row, col)) == tbl.get((row, second)) {
