@@ -2,8 +2,9 @@
 #![feature(iter_arith)]
 
 mod helpers;
+mod constraints;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead, BufReader};
 use std::fs::File;
 use std::cmp::{max, min};
@@ -150,14 +151,14 @@ impl KenKen {
     }
 
     fn solve(&self) -> Result<(u32, Tbl<u32>), &'static str> {
-        fn inner(ken: &KenKen, work: &mut Tbl<u32>, res: &mut Vec<Tbl<u32>>,
+        fn inner(ken: &KenKen, cons: &Tbl<BTreeSet<u32>>, work: &mut Tbl<u32>, res: &mut Vec<Tbl<u32>>,
                  rmask: &mut [u32], cmask: &mut [u32], steps: &mut u32, row: usize, col: usize)
         {
             *steps += 1;
             let pval = rmask[row] & cmask[col];
 
-            // try to place each number in a cell
-            for v in 1..ken.size+1 {
+            // try to place each candidate number in a cell
+            for &v in cons.get((row, col)) {
                 // check if we can do it without duplicating numbers in rows/cols
                 if pval & (1 << v) == 0 {
                     continue;
@@ -170,9 +171,9 @@ impl KenKen {
                     cmask[col] &= !(1 << v);
                     // and recurse
                     if col < ken.size - 1 {
-                        inner(ken, work, res, rmask, cmask, steps, row, col + 1);
+                        inner(ken, cons, work, res, rmask, cmask, steps, row, col + 1);
                     } else if row < ken.size - 1 {
-                        inner(ken, work, res, rmask, cmask, steps, row + 1, 0);
+                        inner(ken, cons, work, res, rmask, cmask, steps, row + 1, 0);
                     } else {
                         res.push(work.clone());  // solution found!
                     }
@@ -185,12 +186,16 @@ impl KenKen {
             work.put(row, col, 0);
         }
 
+        let mut cons = constraints::empty_constraints(self);
+        constraints::initial_constraints(self, &mut cons);
+        while constraints::reduce_constraints(self, &mut cons) { }
+
         let mut work = Tbl::square(self.size, 0);
         let mut res = Vec::new();
         let mut rmask = vec![((1 << self.size) - 1) << 1; self.size];
         let mut cmask = vec![((1 << self.size) - 1) << 1; self.size];
         let mut steps = 0;
-        inner(self, &mut work, &mut res, &mut rmask, &mut cmask, &mut steps, 0, 0);
+        inner(self, &cons, &mut work, &mut res, &mut rmask, &mut cmask, &mut steps, 0, 0);
         if res.len() > 1 {
             Err("found more than 1 solution")
         } else {
