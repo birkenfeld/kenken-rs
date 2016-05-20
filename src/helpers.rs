@@ -11,11 +11,11 @@ impl<T> Tbl<T> {
         Tbl(n, vec![t; n*n])
     }
 
-    pub fn get(&self, (i, j): (usize, usize)) -> &T {
+    pub fn get(&self, i: usize, j: usize) -> &T {
         &self.1[i*self.0 + j]
     }
 
-    pub fn get_mut(&mut self, (i, j): (usize, usize)) -> &mut T {
+    pub fn get_mut(&mut self, i: usize, j: usize) -> &mut T {
         &mut self.1[i*self.0 + j]
     }
 

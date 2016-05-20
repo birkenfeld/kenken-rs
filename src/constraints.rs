@@ -118,14 +118,18 @@ impl<'a> Constraints<'a> {
         }
     }
 
-    pub fn get(&self, row: usize, col: usize) -> &BTreeSet<u32> {
-        self.cellcands.get((row, col))
+    pub fn get_cage_candidates(&self, idx: usize) -> &Vec<Vec<u32>> {
+        &self.cagecands[idx].0
+    }
+
+    fn get(&self, row: usize, col: usize) -> &BTreeSet<u32> {
+        self.cellcands.get(row, col)
     }
 
     fn exclude(&mut self, row: usize, col: usize, el: u32) -> bool {
-        let changed = self.cellcands.get_mut((row, col)).remove(&el);
+        let changed = self.cellcands.get_mut(row, col).remove(&el);
         if changed {
-            let (cageidx, cellidx) = *self.ken.cell2cage.get((row, col));
+            let (cageidx, cellidx) = *self.ken.cell2cage.get(row, col);
             let rcands = &mut self.cagecands[cageidx];
             rcands.0.retain(|cand| cand[cellidx] != el);
             for (otheridx, &(row, col)) in self.ken.cages[cageidx].cells.iter().enumerate() {
