@@ -9,6 +9,7 @@ use std::fs::File;
 use helpers::{Tbl, RowColMask};
 use constraints::Constraints;
 
+/// Represents the arithmetic operation in a cage.
 pub enum Op {
     Const(u32),
     Add(u32),
@@ -17,24 +18,34 @@ pub enum Op {
     Div(u32),
 }
 
+/// Represents a single cage in a puzzle.
 pub struct Cage {
+    /// List of cell coordinates that belong to the cage.
     cells: Vec<(usize, usize)>,
+    /// Operation and goal value of the cage.
     operation: Op,
 }
 
 impl Cage {
+    /// Creates a new cage.  The operation is initially Const() because it
+    /// is either Const or read afterwards.
     fn new(val: u32) -> Cage {
         Cage { cells: Vec::with_capacity(6), operation: Op::Const(val) }
     }
 }
 
+/// Represents a complete puzzle.
 pub struct KenKen {
+    /// Size of the puzzle (number of cells is size*size).
     size: usize,
+    /// All cages.
     cages: Vec<Cage>,
+    /// Mapping of cell (row, col) to (cage index, index within cage's cells).
     cell2cage: Tbl<(usize, usize)>,
 }
 
 impl KenKen {
+    /// Load a puzzle from a file.
     fn load(filename: &str) -> Result<KenKen, String> {
         let file = try!(File::open(filename).map_err(|e| format!("{}", e)));
         let mut it = BufReader::new(file).lines().enumerate().peekable();
@@ -46,6 +57,7 @@ impl KenKen {
         }
         let cell2cage = Tbl::square(size, (!0, 0));
         let mut ken = KenKen { size: size, cages: Vec::new(), cell2cage: cell2cage };
+        // Read the puzzle cage definition (first part).
         for (row, line) in it.by_ref() {
             let line = try!(line.map_err(|e| format!("{}", e)));
             if line.is_empty() {
@@ -67,6 +79,7 @@ impl KenKen {
                 cage.cells.push((row, col));
             }
         }
+        // Read the cage's operation definitions, one per line.
         for (_, line) in it {
             let line = try!(line.map_err(|e| format!("{}", e)));
             if line.is_empty() {
@@ -92,6 +105,7 @@ impl KenKen {
                 other => return Err(format!("invalid operator: {}", other)),
             };
         }
+        // Check the cage definitions and add the cages to the puzzle.
         for (key, cage) in cells {
             match cage.operation {
                 Op::Sub(_) | Op::Div(_) => if cage.cells.len() != 2 {
@@ -113,6 +127,7 @@ impl KenKen {
         Ok(ken)
     }
 
+    /// Solve the puzzle (or return a failure string).
     fn solve(&self) -> Result<(u32, Tbl<u32>), &'static str> {
         fn inner(ken: &KenKen, cons: &Constraints, work: &mut Tbl<u32>, res: &mut Vec<Tbl<u32>>,
                  mask: &mut RowColMask, steps: &mut u32, cageidx: usize)

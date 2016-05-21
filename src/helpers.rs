@@ -2,6 +2,7 @@
 
 use std::fmt;
 
+/// Represents a square sized table of some value type.
 #[derive(Clone)]
 pub struct Tbl<T>(usize, Vec<T>);
 
@@ -27,6 +28,7 @@ impl<T> Tbl<T> {
     }
 }
 
+/// Function to display a (finished) puzzle solution.
 impl fmt::Display for Tbl<u32> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut sep = vec!["+---"; self.0].join("");
@@ -42,6 +44,10 @@ impl fmt::Display for Tbl<u32> {
     }
 }
 
+/// Represents a set of values (32 bits means we can handle values 0...31).
+///
+/// Since the set is used for candidate numbers, and the puzzle size is
+/// restricted to 15, we don't need more space.
 #[derive(Clone, PartialEq)]
 pub struct BitSet(u32);
 
@@ -89,6 +95,8 @@ impl BitSet {
     }
 }
 
+/// Represents a mask for numbers in rows and columns, used to check if we can insert
+/// a number in a certain cell.
 pub struct RowColMask(Vec<BitSet>, Vec<BitSet>);
 
 impl RowColMask {
@@ -111,6 +119,11 @@ impl RowColMask {
     }
 }
 
+/// A small vector of up to 15 4-bit elements, represented as an u64.  The last
+/// 4 bits hold the number of elements.
+///
+/// This is used to hold candidate sequences for cages.  This means we can have
+/// cages with up to 15 cells, and the numbers must be <= 15 too.
 #[derive(Clone)]
 pub struct SmallVec(u64);
 

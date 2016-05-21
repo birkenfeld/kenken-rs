@@ -6,9 +6,11 @@ use std::cmp::min;
 use {KenKen, Cage, Op};
 use helpers::{Tbl, BitSet, SmallVec};
 
+/// Holds all candidate sequences for a single cage.
 struct CageCandidates(Vec<SmallVec>);
 
 impl CageCandidates {
+    /// Generates initial candidates.
     fn from_cage(ken: &KenKen, cage: &Cage) -> CageCandidates {
         let size = ken.size as u32;
         let ncells = cage.cells.len() as u32;
@@ -21,6 +23,8 @@ impl CageCandidates {
         }
     }
 
+    /// Reduce the initial candidates by excluding candidates that have same
+    /// numbers in a single row or column.
     fn reduced(mut self, cage: &Cage) -> CageCandidates {
         for (i, &(row1, col1)) in cage.cells.iter().enumerate() {
             for (j, &(row2, col2)) in cage.cells.iter().enumerate().skip(i + 1) {
@@ -36,6 +40,7 @@ impl CageCandidates {
         self
     }
 
+    /// Returns the possible numbers in a cell as a BitSet.
     fn candidates_for_cell(&self, ix: usize) -> BitSet {
         let mut res = BitSet::new_empty();
         for v in &self.0 {
@@ -44,6 +49,7 @@ impl CageCandidates {
         res
     }
 
+    /// Generate possible sequences for an addition cage.
     fn for_add(max: u32, goal: u32, len: u32) -> Vec<SmallVec> {
         if len == 1 {
             if goal <= max {
@@ -64,6 +70,7 @@ impl CageCandidates {
         }
     }
 
+    /// Generate possible sequences for a multiplication cage.
     fn for_mul(max: u32, goal: u32, len: u32) -> Vec<SmallVec> {
         if len == 1 {
             if goal <= max {
@@ -87,17 +94,23 @@ impl CageCandidates {
         }
     }
 
+    /// Generate possible sequences for a subtraction cage.
+    ///
+    /// Subtraction cages always have two cells next to each other, so it is
+    /// very easy to find the candidates.
     fn for_sub(max: u32, goal: u32) -> Vec<SmallVec> {
         (1..max-goal+1).flat_map(|i| vec![SmallVec::new_with_two(i, i + goal),
                                           SmallVec::new_with_two(i + goal, i)]).collect()
     }
 
+    /// Generate possible sequences for a division cage.
     fn for_div(max: u32, goal: u32) -> Vec<SmallVec> {
         (1..max/goal+1).flat_map(|i| vec![SmallVec::new_with_two(i, i * goal),
                                           SmallVec::new_with_two(i * goal, i)]).collect()
     }
 }
 
+/// Represents all candidates for cages and individual cells for a single puzzle.
 pub struct Constraints<'a> {
     ken: &'a KenKen,
     cellcands: Tbl<BitSet>,
@@ -121,6 +134,8 @@ impl<'a> Constraints<'a> {
         self.cellcands.get(row, col)
     }
 
+    /// Excludes number `el` from the cell at (row, col).  Updates cage candidates
+    /// accordingly, and returns true if anything was changed.
     fn exclude(&mut self, row: usize, col: usize, el: u32) -> bool {
         if self.cellcands.get(row, col).test(el) {
             self.cellcands.get_mut(row, col).clear(el);
@@ -139,6 +154,7 @@ impl<'a> Constraints<'a> {
         }
     }
 
+    /// Determines initial constraints from cage candidates.
     pub fn determine_initial(&mut self) {
         for cage in &self.ken.cages {
             let new = CageCandidates::from_cage(self.ken, cage);
@@ -149,6 +165,10 @@ impl<'a> Constraints<'a> {
         }
     }
 
+    /// Tries to reduce constraints by removing known values within a
+    /// row or column from other cages in that row or column.
+    ///
+    /// Returns true if anything was changed.
     pub fn reduce(&mut self) -> bool {
         let mut changed = false;
         for row in 0..self.ken.size {
@@ -197,6 +217,7 @@ impl<'a> Constraints<'a> {
     }
 }
 
+/// Displays a table of candidates for each cell.
 impl<'a> fmt::Display for Constraints<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let size = self.ken.size;
