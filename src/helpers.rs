@@ -89,6 +89,28 @@ impl BitSet {
     }
 }
 
+pub struct RowColMask(Vec<BitSet>, Vec<BitSet>);
+
+impl RowColMask {
+    pub fn new(size: usize) -> RowColMask {
+        RowColMask(vec![BitSet::new_full(size); size], vec![BitSet::new_full(size); size])
+    }
+
+    pub fn ok(&self, row: usize, col: usize, el: u32) -> bool {
+        self.0[row].test(el) && self.1[col].test(el)
+    }
+
+    pub fn set(&mut self, row: usize, col: usize, el: u32) {
+        self.0[row].set(el);
+        self.1[col].set(el);
+    }
+
+    pub fn clear(&mut self, row: usize, col: usize, el: u32) {
+        self.0[row].clear(el);
+        self.1[col].clear(el);
+    }
+}
+
 #[derive(Clone)]
 pub struct SmallVec(u64);
 
