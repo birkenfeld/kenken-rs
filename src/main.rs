@@ -4,11 +4,12 @@
 mod helpers;
 mod constraints;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader};
 use std::fs::File;
 use std::cmp::{max, min};
 use helpers::Tbl;
+use constraints::Constraints;
 
 pub enum Op {
     Const(u32),
@@ -151,14 +152,14 @@ impl KenKen {
     }
 
     fn solve(&self) -> Result<(u32, Tbl<u32>), &'static str> {
-        fn inner(ken: &KenKen, cons: &Tbl<BTreeSet<u32>>, work: &mut Tbl<u32>, res: &mut Vec<Tbl<u32>>,
+        fn inner(ken: &KenKen, cons: &Constraints, work: &mut Tbl<u32>, res: &mut Vec<Tbl<u32>>,
                  rmask: &mut [u32], cmask: &mut [u32], steps: &mut u32, row: usize, col: usize)
         {
             *steps += 1;
             let pval = rmask[row] & cmask[col];
 
             // try to place each candidate number in a cell
-            for &v in cons.get((row, col)) {
+            for &v in cons.get(row, col) {
                 // check if we can do it without duplicating numbers in rows/cols
                 if pval & (1 << v) == 0 {
                     continue;
@@ -186,9 +187,9 @@ impl KenKen {
             work.put(row, col, 0);
         }
 
-        let mut cons = constraints::empty_constraints(self);
-        constraints::initial_constraints(self, &mut cons);
-        while constraints::reduce_constraints(self, &mut cons) { }
+        let mut cons = Constraints::empty(self);
+        cons.determine_initial();
+        while cons.reduce() { }
 
         let mut work = Tbl::square(self.size, 0);
         let mut res = Vec::new();
