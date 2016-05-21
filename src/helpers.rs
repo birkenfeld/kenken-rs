@@ -1,7 +1,9 @@
 // KenKen puzzle solver, (c) 2016 Georg Brandl.
 
-use std::fmt;
+use std::fmt::{self, Write};
 use std::iter::repeat;
+
+use KenKen;
 
 /// Represents a square sized table of some value type.
 #[derive(Clone)]
@@ -164,4 +166,69 @@ impl Iterator for SmallVecIter {
             None
         }
     }
+}
+
+
+pub fn format_square<T: fmt::Display>(ken: &KenKen, cellsize: usize, contents: &[T]) -> String {
+    let mut res = String::with_capacity((cellsize + 1) * (ken.size + 2));
+    let max = ken.size - 1;
+    let cn = |i, j| if i <= max && j <= max { ken.cell2cage.get(i, j).0 } else { !0 };
+    let cs = |s| repeat(s).take(cellsize).collect::<String>();
+    res.push('┏');
+    for j in 0..ken.size {
+        res.push_str(&cs('━'));
+        if j < max {
+            res.push(if cn(0, j) != cn(0, j+1) { '┳' } else { '┯' });
+        } else {
+            res.push_str("┓\n");
+        }
+    }
+    for i in 0..ken.size {
+        res.push('┃');
+        for j in 0..ken.size {
+            write!(&mut res, "{0:^1$}", contents[i*ken.size + j], cellsize).unwrap();
+            res.push(if cn(i, j) != cn(i, j+1) { '┃' } else { '│' });
+        }
+        res.push('\n');
+        if i < max {
+            res.push(if cn(i, 0) != cn(i+1, 0) { '┣' } else { '┠' });
+            for j in 0..ken.size {
+                let a = cn(i, j);
+                let b = cn(i, j+1);
+                let c = cn(i+1, j);
+                let d = cn(i+1, j+1);
+                res.push_str(&cs(if a != c { '━' } else { '─' }));
+                if j < max {
+                    res.push(match () {
+                        _ if a == b && b == c && c == d => '┼',
+                        _ if a == b && c == d => '┿',
+                        _ if a == c && b == d => '╂',
+                        _ if a == b && b == c => '╆',
+                        _ if a == b && b == d => '╅',
+                        _ if a == c && c == d => '╄',
+                        _ if b == c && c == d => '╃',
+                        _ if a == b => '╈',
+                        _ if a == c => '╊',
+                        _ if b == d => '╉',
+                        _ if c == d => '╇',
+                        _           => '╋',
+                    });
+                } else {
+                    res.push(if a != c { '┫' } else { '┨' });
+                    res.push('\n');
+                }
+            }
+        } else {
+            res.push('┗');
+            for j in 0..ken.size {
+                res.push_str(&cs('━'));
+                if j < max {
+                    res.push(if cn(i, j) != cn(i, j+1) { '┻' } else { '┷' });
+                } else {
+                    res.push_str("┛\n");
+                }
+            }
+        }
+    }
+    res
 }

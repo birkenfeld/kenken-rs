@@ -3,6 +3,7 @@
 mod helpers;
 mod constraints;
 
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::env::args;
@@ -129,6 +130,26 @@ impl KenKen {
         Ok(ken)
     }
 
+    /// Return a vector of "descriptions" for each cell.  For each cage, one cell
+    /// will have the operation, and the other cells will be empty.
+    fn get_descs(&self) -> (usize, Vec<String>) {
+        let mut res = vec![String::new(); self.size * self.size];
+        let mut maxlen = 3;  // minimum width (gives a square puzzle)
+        for cage in &self.cages {
+            let &(row, col) = &cage.cells[0];
+            let fmt_op = match cage.operation {
+                Op::Add(goal) => format!("{}+", goal),
+                Op::Sub(goal) => format!("{}-", goal),
+                Op::Mul(goal) => format!("{}×", goal),
+                Op::Div(goal) => format!("{}÷", goal),
+                Op::Const(c)  => format!("{}", c),
+            };
+            maxlen = max(maxlen, fmt_op.chars().count());
+            res[row*self.size + col] = fmt_op;
+        }
+        (maxlen, res)
+    }
+
     /// Solve the puzzle (or return a failure string).
     fn solve(&self) -> Result<(u32, Tbl<u32>), &'static str> {
         fn inner(ken: &KenKen, cons: &Constraints, work: &mut Tbl<u32>, res: &mut Vec<Tbl<u32>>,
@@ -201,7 +222,15 @@ fn main() {
         };
         let took = start.elapsed();
         let took = took.as_secs() as f64 + 1e-9 * took.subsec_nanos() as f64;
-        if show_solution { print!("{}", solution); }
+        if show_solution {
+            let (cellsize, descs) = puzzle.get_descs();
+            let out1 = helpers::format_square(&puzzle, cellsize, &descs);
+            let out2 = helpers::format_square(&puzzle, cellsize, solution.as_vec());
+            println!("{0:<1$}    Solution", "Puzzle", puzzle.size * (cellsize + 1));
+            for (l1, l2) in out1.lines().zip(out2.lines()) {
+                println!("{}   {}", l1, l2);
+            }
+        }
         println!("{:-20} {:8} steps {:10.4} ms", arg, steps, took * 1000.);
     }
 }
