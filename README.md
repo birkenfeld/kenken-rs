@@ -32,3 +32,24 @@ single-cell constant cages.  In the second part, each cage is mapped to its
 arithmetic rule.
 
 Puzzles are accepted up to size 15x15.
+
+## Building and running
+
+Build and run using `cargo run --release -- puzzle.ken [...]`.  This is the
+output for the above example puzzle:
+
+```
++---+---+---+---+
+| 2 | 4 | 1 | 3 |
++---+---+---+---+
+| 1 | 2 | 3 | 4 |
++---+---+---+---+
+| 3 | 1 | 4 | 2 |
++---+---+---+---+
+| 4 | 3 | 2 | 1 |
++---+---+---+---+
+examples/test4.ken          8 steps     0.0138 ms
+```
+
+When multiple input files are given on the command line, the solution is not
+printed, only the backtracking steps and timing.
