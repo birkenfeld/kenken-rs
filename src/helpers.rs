@@ -88,3 +88,45 @@ impl BitSet {
         res
     }
 }
+
+#[derive(Clone)]
+pub struct SmallVec(u64);
+
+impl SmallVec {
+    pub fn new_with(n: u32) -> SmallVec {
+        SmallVec((1 << 60) | (n as u64))
+    }
+
+    pub fn new_with_two(n1: u32, n2: u32) -> SmallVec {
+        SmallVec((2 << 60) | (n1 as u64) | (n2 as u64) << 4)
+    }
+
+    pub fn get(&self, ix: usize) -> u32 {
+        (self.0 >> (ix << 2)) as u32 & 0xf
+    }
+
+    pub fn push(&mut self, n: u32) {
+        let len = self.0 >> 60;
+        let shift = len << 2;
+        self.0 = (self.0 & ((1 << shift) - 1)) | (n as u64) << shift | (len + 1) << 60;
+    }
+
+    pub fn iter(&self) -> SmallVecIter {
+        SmallVecIter(self.clone(), (self.0 >> 60) as usize, 0)
+    }
+}
+
+pub struct SmallVecIter(SmallVec, usize, usize);
+
+impl Iterator for SmallVecIter {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<u32> {
+        if self.2 < self.1 {
+            self.2 += 1;
+            Some(self.0.get(self.2 - 1))
+        } else {
+            None
+        }
+    }
+}

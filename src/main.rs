@@ -122,14 +122,14 @@ impl KenKen {
             // try to place each cage candidate in its cells
             'outer: for cand in cons.get_cage_candidates(cageidx) {
                 // check if we can do it without duplicating numbers in rows/cols
-                for (cellidx, &el) in cand.iter().enumerate() {
+                for (cellidx, el) in cand.iter().enumerate() {
                     let (row, col) = ken.cages[cageidx].cells[cellidx];
                     if !rmask[row].test(el) || !cmask[col].test(el) {
                         continue 'outer;
                     }
                 }
                 // if yes, do it
-                for (cellidx, &el) in cand.iter().enumerate() {
+                for (cellidx, el) in cand.iter().enumerate() {
                     let (row, col) = ken.cages[cageidx].cells[cellidx];
                     work.put(row, col, el);
                     rmask[row].clear(el);
@@ -142,7 +142,7 @@ impl KenKen {
                     res.push(work.clone());  // solution found!
                 }
                 // reset row/colmasks for our candidate
-                for (cellidx, &el) in cand.iter().enumerate() {
+                for (cellidx, el) in cand.iter().enumerate() {
                     let (row, col) = ken.cages[cageidx].cells[cellidx];
                     rmask[row].set(el);
                     cmask[col].set(el);

@@ -4,20 +4,20 @@ use std::fmt;
 use std::cmp::min;
 
 use {KenKen, Cage, Op};
-use helpers::{Tbl, BitSet};
+use helpers::{Tbl, BitSet, SmallVec};
 
-struct CageCandidates(Vec<Vec<u32>>);
+struct CageCandidates(Vec<SmallVec>);
 
 impl CageCandidates {
     fn from_cage(ken: &KenKen, cage: &Cage) -> CageCandidates {
         let size = ken.size as u32;
-        let ncells = cage.cells.len();
+        let ncells = cage.cells.len() as u32;
         match cage.operation {
             Op::Add(goal) => CageCandidates(Self::for_add(size, goal, ncells)).reduced(cage),
             Op::Mul(goal) => CageCandidates(Self::for_mul(size, goal, ncells)).reduced(cage),
             Op::Sub(goal) => CageCandidates(Self::for_sub(size, goal)),
             Op::Div(goal) => CageCandidates(Self::for_div(size, goal)),
-            Op::Const(c)  => CageCandidates(vec![vec![c]]),
+            Op::Const(c)  => CageCandidates(vec![SmallVec::new_with(c)]),
         }
     }
 
@@ -26,7 +26,7 @@ impl CageCandidates {
             for (j, &(row2, col2)) in cage.cells.iter().enumerate().skip(i + 1) {
                 self.0.retain(|cand| {
                     if row1 == row2 || col1 == col2 {
-                        cand[i] != cand[j]
+                        cand.get(i) != cand.get(j)
                     } else {
                         true
                     }
@@ -39,70 +39,62 @@ impl CageCandidates {
     fn candidates_for_cell(&self, ix: usize) -> BitSet {
         let mut res = BitSet::new_empty();
         for v in &self.0 {
-            res.set(v[ix]);
+            res.set(v.get(ix));
         }
         res
     }
 
-    fn for_add(max: u32, goal: u32, total: usize) -> Vec<Vec<u32>> {
-        fn inner(max: u32, total: usize, len: u32, goal: u32) -> Vec<Vec<u32>> {
-            if len == 1 {
-                if goal <= max {
-                    let mut v = Vec::with_capacity(total);
-                    v.push(goal);
-                    vec![v]
-                } else {
-                    vec![]
-                }
+    fn for_add(max: u32, goal: u32, len: u32) -> Vec<SmallVec> {
+        if len == 1 {
+            if goal <= max {
+                vec![SmallVec::new_with(goal)]
             } else {
-                let mut all = Vec::new();
-                for i in 1..min(max + 1, goal - len + 2) {
-                    let mut candidates = inner(max, total, len - 1, goal - i);
-                    for v in &mut candidates {
-                        v.push(i);
-                    }
-                    all.extend(candidates)
-                }
-                all
+                vec![]
             }
+        } else {
+            let mut all = Vec::new();
+            for i in 1..min(max + 1, goal - len + 2) {
+                let mut candidates = Self::for_add(max, goal - i, len - 1);
+                for v in &mut candidates {
+                    v.push(i);
+                }
+                all.extend(candidates)
+            }
+            all
         }
-        inner(max, total, total as u32, goal)
     }
 
-    fn for_mul(max: u32, goal: u32, total: usize) -> Vec<Vec<u32>> {
-        fn inner(max: u32, total: usize, len: u32, goal: u32) -> Vec<Vec<u32>> {
-            if len == 1 {
-                if goal <= max {
-                    let mut v = Vec::with_capacity(total);
-                    v.push(goal);
-                    vec![v]
-                } else {
-                    vec![]
-                }
+    fn for_mul(max: u32, goal: u32, len: u32) -> Vec<SmallVec> {
+        if len == 1 {
+            if goal <= max {
+                vec![SmallVec::new_with(goal)]
             } else {
-                let mut all = Vec::new();
-                for i in 1..min(max + 1, goal + 1) {
-                    if goal % i != 0 {
-                        continue;
-                    }
-                    let mut candidates = inner(max, total, len - 1, goal / i);
-                    for v in &mut candidates {
-                        v.push(i);
-                    }
-                    all.extend(candidates)
-                }
-                all
+                vec![]
             }
+        } else {
+            let mut all = Vec::new();
+            for i in 1..min(max + 1, goal + 1) {
+                if goal % i != 0 {
+                    continue;
+                }
+                let mut candidates = Self::for_mul(max, goal / i, len - 1);
+                for v in &mut candidates {
+                    v.push(i);
+                }
+                all.extend(candidates)
+            }
+            all
         }
-        inner(max, total, total as u32, goal)
     }
 
-    fn for_sub(max: u32, goal: u32) -> Vec<Vec<u32>> {
-        (1..max-goal+1).flat_map(|i| vec![vec![i, i + goal], vec![i + goal, i]]).collect()
+    fn for_sub(max: u32, goal: u32) -> Vec<SmallVec> {
+        (1..max-goal+1).flat_map(|i| vec![SmallVec::new_with_two(i, i + goal),
+                                          SmallVec::new_with_two(i + goal, i)]).collect()
     }
 
-    fn for_div(max: u32, goal: u32) -> Vec<Vec<u32>> {
-        (1..max/goal+1).flat_map(|i| vec![vec![i, i * goal], vec![i * goal, i]]).collect()
+    fn for_div(max: u32, goal: u32) -> Vec<SmallVec> {
+        (1..max/goal+1).flat_map(|i| vec![SmallVec::new_with_two(i, i * goal),
+                                          SmallVec::new_with_two(i * goal, i)]).collect()
     }
 }
 
@@ -121,7 +113,7 @@ impl<'a> Constraints<'a> {
         }
     }
 
-    pub fn get_cage_candidates(&self, idx: usize) -> &Vec<Vec<u32>> {
+    pub fn get_cage_candidates(&self, idx: usize) -> &Vec<SmallVec> {
         &self.cagecands[idx].0
     }
 
@@ -135,7 +127,7 @@ impl<'a> Constraints<'a> {
 
             let (cageidx, cellidx) = *self.ken.cell2cage.get(row, col);
             let rcands = &mut self.cagecands[cageidx];
-            rcands.0.retain(|cand| cand[cellidx] != el);
+            rcands.0.retain(|cand| cand.get(cellidx) != el);
             for (otheridx, &(row, col)) in self.ken.cages[cageidx].cells.iter().enumerate() {
                 if otheridx != cellidx {
                     self.cellcands.put(row, col, rcands.candidates_for_cell(otheridx));
