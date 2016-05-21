@@ -4,8 +4,11 @@ mod helpers;
 mod constraints;
 
 use std::collections::BTreeMap;
+use std::error::Error;
+use std::env::args;
 use std::io::{BufRead, BufReader};
 use std::fs::File;
+use std::time::Instant;
 use helpers::{Tbl, RowColMask};
 use constraints::Constraints;
 
@@ -46,26 +49,25 @@ pub struct KenKen {
 
 impl KenKen {
     /// Load a puzzle from a file.
-    fn load(filename: &str) -> Result<KenKen, String> {
-        let file = try!(File::open(filename).map_err(|e| format!("{}", e)));
+    fn load(filename: &str) -> Result<KenKen, Box<Error>> {
+        let file = try!(File::open(filename));
         let mut it = BufReader::new(file).lines().enumerate().peekable();
         let mut cells = BTreeMap::new();
-        let size = try!(try!(it.peek().ok_or("no lines in file")).1.as_ref()
-                        .map_err(|e| format!("{}", e))).len();
+        let size = it.peek().and_then(|r| r.1.as_ref().map(String::len).ok()).unwrap_or(0);
         if size < 2 || size > 15 {
-            return Err(format!("kenken size must be < 16 (found {})", size));
+            return Err(format!("kenken size must be < 16 (found {})", size).into());
         }
         let cell2cage = Tbl::square(size, (!0, 0));
         let mut ken = KenKen { size: size, cages: Vec::new(), cell2cage: cell2cage };
         // Read the puzzle cage definition (first part).
         for (row, line) in it.by_ref() {
-            let line = try!(line.map_err(|e| format!("{}", e)));
+            let line = try!(line);
             if line.is_empty() {
                 break;
             }
             if line.len() != size {
                 return Err(format!("unequal line lengths (expected {}, found {})",
-                                   size, line.len()));
+                                   size, line.len()).into());
             }
             for (col, ch) in line.chars().enumerate() {
                 let cage = if ch.is_numeric() {
@@ -81,13 +83,13 @@ impl KenKen {
         }
         // Read the cage's operation definitions, one per line.
         for (_, line) in it {
-            let line = try!(line.map_err(|e| format!("{}", e)));
+            let line = try!(line);
             if line.is_empty() {
                 break;
             }
             let parts = line.split(": ").collect::<Vec<_>>();
             if parts.len() != 2 || parts[0].len() != 1 {
-                return Err(format!("invalid line with cage: {}", line));
+                return Err(format!("invalid line with cage: {}", line).into());
             }
             let key = try!(parts[0].chars().nth(0).ok_or("missing char before :"));
             if !cells.contains_key(&key) {
@@ -102,21 +104,21 @@ impl KenKen {
                 "-" => Op::Sub(goal),
                 "*" => Op::Mul(goal),
                 "/" => Op::Div(goal),
-                other => return Err(format!("invalid operator: {}", other)),
+                other => return Err(format!("invalid operator: {}", other).into()),
             };
         }
         // Check the cage definitions and add the cages to the puzzle.
         for (key, cage) in cells {
             match cage.operation {
                 Op::Sub(_) | Op::Div(_) => if cage.cells.len() != 2 {
-                    return Err(format!("sub/div cages must have 2 cells, not {}", cage.cells.len()));
+                    return Err(format!("sub/div cages must have 2 cells, not {}", cage.cells.len()).into());
                 },
                 Op::Const(goal) => if goal == 0 {
-                    return Err(format!("found cage ({}) without defined goal", key));
+                    return Err(format!("found cage ({}) without defined goal", key).into());
                 },
                 _ => if cage.cells.len() < 2 || cage.cells.len() > 15 {
                     return Err(format!("add/mul cages must have less than 16 cells, not {}",
-                                       cage.cells.len()));
+                                       cage.cells.len()).into());
                 }
             }
             for (i, &(row, col)) in cage.cells.iter().enumerate() {
@@ -185,27 +187,21 @@ impl KenKen {
 }
 
 fn main() {
-    use std::env::args;
-    use std::time::Instant;
     let args: Vec<_> = args().skip(1).collect();
-    let nargs = args.len();
+    let show_solution = args.len() == 1;
     for arg in args {
-        match KenKen::load(&arg) {
-            Err(e) => println!("Error loading {}: {}", arg, e),
-            Ok(puz) => {
-                let i1 = Instant::now();
-                match puz.solve() {
-                    Err(e) => println!("Error solving {}: {}", arg, e),
-                    Ok((steps, solution)) => {
-                        let el = i1.elapsed();
-                        if nargs == 1 {
-                            print!("{}", solution);
-                        }
-                        let el = el.as_secs() as f64 * 1000. + el.subsec_nanos() as f64 / 1000000.;
-                        println!("{:-14} {:8} steps {:10.4} ms", arg, steps, el);
-                    }
-                }
-            }
-        }
+        let puzzle = match KenKen::load(&arg) {
+            Err(e) => { println!("*** Error loading {}: {}", arg, e); continue; }
+            Ok(puzzle) => puzzle
+        };
+        let start = Instant::now();
+        let (steps, solution) = match puzzle.solve() {
+            Err(e) => { println!("*** Error solving {}: {}", arg, e); continue; }
+            Ok(res) => res
+        };
+        let took = start.elapsed();
+        let took = took.as_secs() as f64 + 1e-9 * took.subsec_nanos() as f64;
+        if show_solution { print!("{}", solution); }
+        println!("{:-20} {:8} steps {:10.4} ms", arg, steps, took * 1000.);
     }
 }
