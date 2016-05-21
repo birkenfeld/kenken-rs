@@ -1,6 +1,7 @@
 // KenKen puzzle solver, (c) 2016 Georg Brandl.
 
 use std::fmt;
+use std::iter::repeat;
 use std::cmp::min;
 
 use {KenKen, Cage, Op};
@@ -222,11 +223,9 @@ impl<'a> fmt::Display for Constraints<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let size = self.ken.size;
         let nums = &self.cellcands.as_vec();
-        let v: Vec<_> = nums.iter().map(|set| set.to_string()).collect();
-        let mut sep1 = String::from("+");
-        for _ in 0..size+2 { sep1.push('-'); }
-        let mut sep = vec![sep1; size].join("");
-        sep.push_str("+\n");
+        let v = nums.iter().map(|set| set.to_string()).collect::<Vec<_>>();
+        let sep1 = "+".to_string() + &repeat('-').take(size+2).collect::<String>();
+        let sep = repeat(&*sep1).take(size).collect::<String>() + "+\n";
         for row in v.chunks(size) {
             try!(f.write_str(&sep));
             for cell in row {

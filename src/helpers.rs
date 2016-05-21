@@ -1,6 +1,7 @@
 // KenKen puzzle solver, (c) 2016 Georg Brandl.
 
 use std::fmt;
+use std::iter::repeat;
 
 /// Represents a square sized table of some value type.
 #[derive(Clone)]
@@ -31,8 +32,7 @@ impl<T> Tbl<T> {
 /// Function to display a (finished) puzzle solution.
 impl fmt::Display for Tbl<u32> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut sep = vec!["+---"; self.0].join("");
-        sep.push_str("+\n");
+        let sep = repeat("+---").take(self.0).collect::<String>() + "+\n";
         for row in self.1.chunks(self.0) {
             try!(f.write_str(&sep));
             for cell in row {
