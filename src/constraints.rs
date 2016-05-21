@@ -2,10 +2,9 @@
 
 use std::fmt;
 use std::cmp::min;
-use std::collections::BTreeSet;
 
 use {KenKen, Cage, Op};
-use helpers::Tbl;
+use helpers::{Tbl, BitSet};
 
 struct CageCandidates(Vec<Vec<u32>>);
 
@@ -37,8 +36,12 @@ impl CageCandidates {
         self
     }
 
-    fn candidates_for_cell(&self, ix: usize) -> BTreeSet<u32> {
-        self.0.iter().map(|v| v[ix]).collect()
+    fn candidates_for_cell(&self, ix: usize) -> BitSet {
+        let mut res = BitSet::new_empty();
+        for v in &self.0 {
+            res.set(v[ix]);
+        }
+        res
     }
 
     fn for_add(max: u32, goal: u32, total: usize) -> Vec<Vec<u32>> {
@@ -105,7 +108,7 @@ impl CageCandidates {
 
 pub struct Constraints<'a> {
     ken: &'a KenKen,
-    cellcands: Tbl<BTreeSet<u32>>,
+    cellcands: Tbl<BitSet>,
     cagecands: Vec<CageCandidates>,
 }
 
@@ -113,7 +116,7 @@ impl<'a> Constraints<'a> {
     pub fn empty(ken: &'a KenKen) -> Constraints<'a> {
         Constraints {
             ken: ken,
-            cellcands: Tbl::square(ken.size, (1..ken.size as u32 + 1).collect()),
+            cellcands: Tbl::square(ken.size, BitSet::new_full(ken.size)),
             cagecands: Vec::with_capacity(ken.cages.len()),
         }
     }
@@ -122,13 +125,14 @@ impl<'a> Constraints<'a> {
         &self.cagecands[idx].0
     }
 
-    fn get(&self, row: usize, col: usize) -> &BTreeSet<u32> {
+    fn get(&self, row: usize, col: usize) -> &BitSet {
         self.cellcands.get(row, col)
     }
 
     fn exclude(&mut self, row: usize, col: usize, el: u32) -> bool {
-        let changed = self.cellcands.get_mut(row, col).remove(&el);
-        if changed {
+        if self.cellcands.get(row, col).test(el) {
+            self.cellcands.get_mut(row, col).clear(el);
+
             let (cageidx, cellidx) = *self.ken.cell2cage.get(row, col);
             let rcands = &mut self.cagecands[cageidx];
             rcands.0.retain(|cand| cand[cellidx] != el);
@@ -137,8 +141,10 @@ impl<'a> Constraints<'a> {
                     self.cellcands.put(row, col, rcands.candidates_for_cell(otheridx));
                 }
             }
+            true
+        } else {
+            false
         }
-        changed
     }
 
     pub fn determine_initial(&mut self) {
@@ -155,10 +161,10 @@ impl<'a> Constraints<'a> {
         let mut changed = false;
         for row in 0..self.ken.size {
             for col in 0..self.ken.size {
-                let n = self.get(row, col).len();
+                let n = self.get(row, col).count();
                 // remove known values from other cells in same row/col
                 if n == 1 {
-                    let el = *self.get(row, col).iter().next().unwrap();
+                    let el = self.get(row, col).get_one();
                     for other in 0..self.ken.size {
                         if other != col {
                             changed |= self.exclude(row, other, el);
@@ -171,13 +177,13 @@ impl<'a> Constraints<'a> {
                 // remove values from other cells in same row/col if two cells are
                 // known to have the same two possibilities
                 else if n == 2 {
-                    let els: Vec<_> = self.get(row, col).iter().cloned().collect();
+                    let (el1, el2) = self.get(row, col).get_two();
                     for scol in col+1..self.ken.size {
                         if self.get(row, col) == self.get(row, scol) {
                             for ocol in 0..self.ken.size {
                                 if ocol != col && ocol != scol {
-                                    changed |= self.exclude(row, ocol, els[0]);
-                                    changed |= self.exclude(row, ocol, els[1]);
+                                    changed |= self.exclude(row, ocol, el1);
+                                    changed |= self.exclude(row, ocol, el2);
                                 }
                             }
                         }
@@ -186,8 +192,8 @@ impl<'a> Constraints<'a> {
                         if self.get(row, col) == self.get(srow, col) {
                             for orow in 0..self.ken.size {
                                 if orow != row && orow != srow {
-                                    changed |= self.exclude(orow, col, els[0]);
-                                    changed |= self.exclude(orow, col, els[1]);
+                                    changed |= self.exclude(orow, col, el1);
+                                    changed |= self.exclude(orow, col, el2);
                                 }
                             }
                         }
@@ -201,6 +207,20 @@ impl<'a> Constraints<'a> {
 
 impl<'a> fmt::Display for Constraints<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.cellcands.fmt(f)
+        let size = self.ken.size;
+        let nums = &self.cellcands.as_vec();
+        let v: Vec<_> = nums.iter().map(|set| set.to_string()).collect();
+        let mut sep1 = String::from("+");
+        for _ in 0..size+2 { sep1.push('-'); }
+        let mut sep = vec![sep1; size].join("");
+        sep.push_str("+\n");
+        for row in v.chunks(size) {
+            try!(f.write_str(&sep));
+            for cell in row {
+                try!(write!(f, "| {0:1$} ", cell, size));
+            }
+            try!(f.write_str("|\n"));
+        }
+        f.write_str(&sep)
     }
 }

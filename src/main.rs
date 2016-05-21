@@ -6,7 +6,7 @@ mod constraints;
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader};
 use std::fs::File;
-use helpers::Tbl;
+use helpers::{Tbl, BitSet};
 use constraints::Constraints;
 
 pub enum Op {
@@ -115,7 +115,7 @@ impl KenKen {
 
     fn solve(&self) -> Result<(u32, Tbl<u32>), &'static str> {
         fn inner(ken: &KenKen, cons: &Constraints, work: &mut Tbl<u32>, res: &mut Vec<Tbl<u32>>,
-                 rmask: &mut [u32], cmask: &mut [u32], steps: &mut u32, cageidx: usize)
+                 rmask: &mut [BitSet], cmask: &mut [BitSet], steps: &mut u32, cageidx: usize)
         {
             *steps += 1;
 
@@ -124,7 +124,7 @@ impl KenKen {
                 // check if we can do it without duplicating numbers in rows/cols
                 for (cellidx, &el) in cand.iter().enumerate() {
                     let (row, col) = ken.cages[cageidx].cells[cellidx];
-                    if rmask[row] & cmask[col] & (1 << el) == 0 {
+                    if !rmask[row].test(el) || !cmask[col].test(el) {
                         continue 'outer;
                     }
                 }
@@ -132,8 +132,8 @@ impl KenKen {
                 for (cellidx, &el) in cand.iter().enumerate() {
                     let (row, col) = ken.cages[cageidx].cells[cellidx];
                     work.put(row, col, el);
-                    rmask[row] &= !(1 << el);
-                    cmask[col] &= !(1 << el);
+                    rmask[row].clear(el);
+                    cmask[col].clear(el);
                 }
                 // and recurse
                 if cageidx < ken.cages.len() - 1 {
@@ -144,8 +144,8 @@ impl KenKen {
                 // reset row/colmasks for our candidate
                 for (cellidx, &el) in cand.iter().enumerate() {
                     let (row, col) = ken.cages[cageidx].cells[cellidx];
-                    rmask[row] |= 1 << el;
-                    cmask[col] |= 1 << el;
+                    rmask[row].set(el);
+                    cmask[col].set(el);
                 }
             }
             // reset the cells
@@ -160,8 +160,8 @@ impl KenKen {
 
         let mut work = Tbl::square(self.size, 0);
         let mut res = Vec::new();
-        let mut rmask = vec![((1 << self.size) - 1) << 1; self.size];
-        let mut cmask = vec![((1 << self.size) - 1) << 1; self.size];
+        let mut rmask = vec![BitSet::new_full(self.size); self.size];
+        let mut cmask = vec![BitSet::new_full(self.size); self.size];
         let mut steps = 0;
         inner(self, &cons, &mut work, &mut res, &mut rmask, &mut cmask, &mut steps, 0);
         if res.len() > 1 {
